@@ -59,23 +59,6 @@ create_vgateway() {
     print "--> ${uid}"
 }
 
-update_vgateway() {
-    spec_file=$1
-    vgateway_name=$2
-    cli_input=$( jq -n \
-    --arg CERTIFICATE_ARN "${CERTIFICATE_ARN}" \
-    --arg ROOT_CA_ARN "${ROOT_CA_ARN}" \
-    -f "$spec_file" )
-    cmd=( $appmesh_cmd update-virtual-gateway \
-                --mesh-name "${MESH_NAME}" \
-                --virtual-gateway-name "${vgateway_name}" \
-                --cli-input-json "$cli_input" \
-                --query virtualGateway.metadata.uid --output text )
-    print "${cmd[@]}"
-    uid=$("${cmd[@]}") || err "Unable to update virtual gateway" "$?"
-    print "--> ${uid}"
-}
-
 delete_vgateway() {
     vgateway_name=$1
     cmd=( $appmesh_cmd delete-virtual-gateway \
@@ -135,21 +118,24 @@ create_vnode() {
     print "--> ${uid}"
 }
 
-update_vnode() {
+create_vnode_backends() {
     spec_file=$1
     vnode_name=$2
     dns_hostname="$3.${SERVICES_DOMAIN}"
+    backend1="$4.${SERVICES_DOMAIN}"
+    backend2="$5.${SERVICES_DOMAIN}"
     cli_input=$( jq -n \
         --arg DNS_HOSTNAME "$3.${SERVICES_DOMAIN}" \
-        --arg CERTIFICATE_ARN "${CERTIFICATE_ARN}" \
+        --arg BACKEND_1 "$4.${SERVICES_DOMAIN}" \
+        --arg BACKEND_2 "$5.${SERVICES_DOMAIN}" \
         -f "$spec_file" )
-    cmd=( $appmesh_cmd update-virtual-node \
+    cmd=( $appmesh_cmd create-virtual-node \
                 --mesh-name "${MESH_NAME}" \
                 --virtual-node-name "${vnode_name}" \
                 --cli-input-json "$cli_input" \
                 --query virtualNode.metadata.uid --output text )
     print "${cmd[@]}"
-    uid=$("${cmd[@]}") || err "Unable to update virtual node" "$?"
+    uid=$("${cmd[@]}") || err "Unable to create virtual node" "$?"
     print "--> ${uid}"
 }
 
@@ -252,47 +238,32 @@ main() {
     up)
         create_mesh "${TEST_MESH_DIR}/mesh.json"
 
-        create_vnode "${TEST_MESH_DIR}/colorteller-white-vn.json" "colorteller-white-vn" "colorteller-white"
         create_vnode "${TEST_MESH_DIR}/colorteller-blue-vn.json" "colorteller-blue-vn" "colorteller-blue"
-        create_vrouter "${TEST_MESH_DIR}/colorteller-vr-1.json" "colorteller-vr-1"
-        create_route "${TEST_MESH_DIR}/colorteller-route-1.json" "colorteller-vr-1" "colorteller-route-1"
         create_vservice "${TEST_MESH_DIR}/colorteller-vs-1.json" "colorteller-1.${SERVICES_DOMAIN}"
 
         create_vnode "${TEST_MESH_DIR}/colorteller-black-vn.json" "colorteller-black-vn" "colorteller-black"
-        create_vnode "${TEST_MESH_DIR}/colorteller-red-vn.json" "colorteller-red-vn" "colorteller-red"
-        create_vrouter "${TEST_MESH_DIR}/colorteller-vr-2.json" "colorteller-vr-2"        
-        create_route "${TEST_MESH_DIR}/colorteller-route-2.json" "colorteller-vr-2" "colorteller-route-2" 
         create_vservice "${TEST_MESH_DIR}/colorteller-vs-2.json" "colorteller-2.${SERVICES_DOMAIN}"
+        
+        create_vnode_backends "${TEST_MESH_DIR}/colorteller-master-vn.json" "colorteller-master-vn" "colorteller-master" "colorteller-1" "colorteller-2"
+        create_vservice "${TEST_MESH_DIR}/colorteller-vs-3.json" "colorteller-master.${SERVICES_DOMAIN}"
 
         create_vgateway "${TEST_MESH_DIR}/colorgateway-vg.json" "colorgateway-vg"
         create_gateway_route "${TEST_MESH_DIR}/colorgateway-route-1.json" "colorgateway-vg" "colorgateway-route-1" "colorteller-1.${SERVICES_DOMAIN}"
         create_gateway_route "${TEST_MESH_DIR}/colorgateway-route-2.json" "colorgateway-vg" "colorgateway-route-2" "colorteller-2.${SERVICES_DOMAIN}"
-        ;;
-    partial_tls_up)
-        update_vnode "${TEST_MESH_DIR}/colorteller-white-vn-tls.json" "colorteller-white-vn" "colorteller-white"
-        update_vgateway "${TEST_MESH_DIR}/colorgateway-vg-backendDefaults.json" "colorgateway-vg"
-        ;;
-    full_tls_up)
-        update_vnode "${TEST_MESH_DIR}/colorteller-blue-vn-tls.json" "colorteller-blue-vn" "colorteller-blue"
-        update_vnode "${TEST_MESH_DIR}/colorteller-black-vn-tls.json" "colorteller-black-vn" "colorteller-black"
-        update_vnode "${TEST_MESH_DIR}/colorteller-red-vn-tls.json" "colorteller-red-vn" "colorteller-red"
+        create_gateway_route "${TEST_MESH_DIR}/colorgateway-route-3.json" "colorgateway-vg" "colorgateway-route-3" "colorteller-master.${SERVICES_DOMAIN}"
         ;;
     down)
         delete_gateway_route "colorgateway-vg" "colorgateway-route-1"
         delete_gateway_route "colorgateway-vg" "colorgateway-route-2"
+        delete_gateway_route "colorgateway-vg" "colorgateway-route-3"
         delete_vgateway "colorgateway-vg"
 
         delete_vservice "colorteller-1.${SERVICES_DOMAIN}"
-        delete_route "colorteller-vr-1" "colorteller-route-1"
-        delete_vrouter "colorteller-vr-1"
-        delete_vnode "colorteller-white-vn"
-        delete_vnode "colorteller-blue-vn"
-
         delete_vservice "colorteller-2.${SERVICES_DOMAIN}"
-        delete_route "colorteller-vr-2" "colorteller-route-2"
-        delete_vrouter "colorteller-vr-2"
+        delete_vservice "colorteller-master.${SERVICES_DOMAIN}"
         delete_vnode "colorteller-black-vn"
-        delete_vnode "colorteller-red-vn"
+        delete_vnode "colorteller-blue-vn"
+        delete_vnode "colorteller-master-vn"
 
         delete_mesh
         ;;

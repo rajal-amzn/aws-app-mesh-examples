@@ -2,7 +2,7 @@
     "spec": {
         "httpRoute" : {
             "match" : {
-                "prefix" : "/color1"
+                "prefix" : "/color"
             },
             "action" : {
                 "target" : {

@@ -1,8 +1,8 @@
 {
     "spec": {
           "provider": {
-             "virtualRouter": {
-                "virtualRouterName": "colorteller-vr-1"
+             "virtualNode": {
+                "virtualNodeName": "colorteller-blue-vn"
              }
           }
     }
